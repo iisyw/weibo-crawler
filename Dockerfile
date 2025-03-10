@@ -1,6 +1,11 @@
 # 设置基础镜像
 FROM python:3.12.0-alpine
 
+# 设置时区为 Shanghai
+RUN apt-get update && apt-get install -y tzdata \
+    && ln -fs /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
+    && dpkg-reconfigure -f noninteractive tzdata
+
 # 设置工作目录
 WORKDIR /app
 
