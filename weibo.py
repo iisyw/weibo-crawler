@@ -684,6 +684,10 @@ class Weibo(object):
 
                 except RequestException as e:
                     try_count += 1
+                    # 如果是404错误，直接跳出重试
+                    if "404 Client Error: Not Found for url" in str(e):
+                        logger.warning(f"[WARNING] 资源不存在，跳过重试: {url}")
+                        break
                     logger.error(f"[ERROR] 请求失败，错误信息：{e}。尝试次数：{try_count}/{MAX_TRY_COUNT}")
                     sleep_time = 60
                     sleep(sleep_time)
