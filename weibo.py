@@ -617,7 +617,7 @@ class Weibo(object):
             s.mount('https://', HTTPAdapter(max_retries=5))
             try_count = 0
             success = False
-            MAX_TRY_COUNT = 5
+            MAX_TRY_COUNT = 3
             detected_extension = None
             while try_count < MAX_TRY_COUNT:
                 try:
@@ -685,7 +685,7 @@ class Weibo(object):
                 except RequestException as e:
                     try_count += 1
                     logger.error(f"[ERROR] 请求失败，错误信息：{e}。尝试次数：{try_count}/{MAX_TRY_COUNT}")
-                    sleep_time = 60 * try_count
+                    sleep_time = 60
                     sleep(sleep_time)
                 except Exception as e:
                     logger.exception(f"[ERROR] 下载过程中发生错误: {e}")
@@ -2100,6 +2100,73 @@ class Weibo(object):
         with codecs.open(user_config_file_path, "w", encoding="utf-8") as f:
             f.write("\n".join(lines))
 
+    def retry_failed_downloads(self):
+        """重试下载失败的文件"""
+        for type in ['img', 'video']:
+            error_file = self.get_filepath(type) + os.sep + "not_downloaded.txt"
+            if not os.path.exists(error_file):
+                continue
+                
+            # 读取失败记录并过滤掉空行
+            with open(error_file, "r", encoding=sys.stdout.encoding) as f:
+                failed_records = [line.strip() for line in f.readlines() if line.strip()]
+            
+            if not failed_records:
+                # 如果没有有效记录，删除文件
+                os.remove(error_file)
+                continue
+                
+            logger.info(f"发现{len(failed_records)}个失败的{type}文件下载记录,开始重试下载...")
+            
+            # 存储成功的记录索引
+            success_indices = []
+            
+            # 重试下载
+            for index, record in enumerate(failed_records):
+                try:
+                    # 添加调试信息
+                    logger.debug(f"正在处理记录: {record}")
+                    
+                    # 使用maxsplit参数确保只分割前两个冒号
+                    parts = record.split(":", 2)
+                    if len(parts) != 3:
+                        logger.error(f"记录格式错误,跳过该记录: {record}")
+                        continue
+                        
+                    weibo_id, file_path, url = parts
+                    logger.debug(f"解析结果: weibo_id={weibo_id}, file_path={file_path}, url={url}")
+                    
+                    # 确保目录存在
+                    os.makedirs(os.path.dirname(file_path), exist_ok=True)
+                    
+                    # 重试下载
+                    self.download_one_file(url, file_path, type, weibo_id)
+                    
+                    # 检查文件是否下载成功
+                    if os.path.exists(file_path):
+                        success_indices.append(index)
+                        logger.info(f"重试下载成功: {file_path}")
+                except Exception as e:
+                    logger.error(f"重试下载失败: {str(e)}")
+                    logger.debug(f"失败的记录: {record}")
+                    continue
+            
+            # 获取仍然失败的记录
+            remaining_records = [r for i, r in enumerate(failed_records) if i not in success_indices]
+            
+            if remaining_records:
+                # 完全重写失败记录文件
+                with open(error_file, "w", encoding=sys.stdout.encoding) as f:
+                    f.write("\n".join(remaining_records))
+                logger.info(f"更新失败记录文件，还有{len(remaining_records)}个文件待下载")
+            else:
+                # 如果没有剩余记录，删除文件
+                os.remove(error_file)
+                logger.info(f"所有{type}文件下载成功，已删除记录文件")
+            
+            if success_indices:
+                logger.info(f"成功重试下载{len(success_indices)}个文件")
+
     def write_data(self, wrote_count):
         """将爬到的信息写入文件或数据库"""
         if self.got_count > wrote_count:
@@ -2166,6 +2233,9 @@ class Weibo(object):
 
                 self.write_data(wrote_count)  # 将剩余不足20页的微博写入文件
             logger.info("微博爬取完成，共爬取%d条微博", self.got_count)
+
+            # 在所有数据爬取完成后尝试重试失败的下载
+            self.retry_failed_downloads()
         except Exception as e:
             logger.exception(e)
 
