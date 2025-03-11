@@ -1,10 +1,10 @@
 # 设置基础镜像
 FROM python:3.12.0-alpine
 
-# 设置时区为 Shanghai
-RUN apt-get update && apt-get install -y tzdata \
-    && ln -fs /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
-    && dpkg-reconfigure -f noninteractive tzdata
+# 安装 tzdata 设置时区
+RUN apk add --no-cache tzdata \
+    && cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
+    && echo "Asia/Shanghai" > /etc/timezone
 
 # 设置工作目录
 WORKDIR /app
@@ -18,8 +18,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # 复制项目文件到工作目录
 COPY . .
 
-# 设置循环间隔
+# 设置默认循环间隔（分钟）
 ENV schedule_interval=1
 
 # 运行应用
-CMD python __main__.py $schedule_interval
+CMD sh -c "python __main__.py $schedule_interval"
