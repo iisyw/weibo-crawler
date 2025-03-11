@@ -18,8 +18,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # 复制项目文件到工作目录
 COPY . .
 
-# 设置默认循环间隔（分钟）
+# 设置循环间隔
 ENV schedule_interval=1
 
 # 运行应用
-CMD sh -c "python __main__.py $schedule_interval"
+CMD python __main__.py $schedule_interval
