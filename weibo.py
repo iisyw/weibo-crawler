@@ -617,7 +617,7 @@ class Weibo(object):
             s.mount('https://', HTTPAdapter(max_retries=5))
             try_count = 0
             success = False
-            MAX_TRY_COUNT = 3
+            MAX_TRY_COUNT = 5
             detected_extension = None
             while try_count < MAX_TRY_COUNT:
                 try:
@@ -684,12 +684,16 @@ class Weibo(object):
 
                 except RequestException as e:
                     try_count += 1
-                    # 如果是404错误，直接跳出重试
-                    if "404 Client Error: Not Found for url" in str(e):
+                    error_msg = str(e)
+                    # 如果是404或403错误，直接跳出重试
+                    if "404 Client Error: Not Found for url" in error_msg:
                         logger.warning(f"[WARNING] 资源不存在，跳过重试: {url}")
                         break
+                    elif "403 Client Error: Forbidden for url" in error_msg:
+                        logger.warning(f"[WARNING] 资源访问被禁止（可能是签名过期），跳过重试: {url}")
+                        break
                     logger.error(f"[ERROR] 请求失败，错误信息：{e}。尝试次数：{try_count}/{MAX_TRY_COUNT}")
-                    sleep_time = 60
+                    sleep_time = 30
                     sleep(sleep_time)
                 except Exception as e:
                     logger.exception(f"[ERROR] 下载过程中发生错误: {e}")
